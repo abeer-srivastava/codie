@@ -16,26 +16,29 @@ const PaletteIcon = () => <span>🎨</span>;
 const MoonIcon = () => <span>🌙</span>;
 const SunIcon = () => <span>☀️</span>;
 
-// Mock Socket.io functionality for demo purposes
-interface MockSocket {
-  emit: (event: string, data?: any) => void;
-  on: (event: string, callback: (...args: any[]) => void) => void;
-  off: (event: string) => void;
+// Real Socket.io client
+import { io, Socket } from "socket.io-client";
+
+// Define the user type if needed for future expansion
+interface User {
+  id: string;
+  name: string;
 }
 
-const mockSocket: MockSocket = {
-  emit: (event: string, data?: any) => {
-    console.log(`Emitting ${event}:`, data);
-  },
-  on: (event: string, callback: (...args: any[]) => void) => {
-    console.log(`Listening for ${event}`);
-  },
-  off: (event: string) => {
-    console.log(`Stopped listening for ${event}`);
-  }
-};
+// Socket type for events
+interface ServerToClientEvents {
+  "code-change": (newCode: string) => void;
+  "user-count": (count: number) => void;
+  "users": (users: User[]) => void;
+}
+interface ClientToServerEvents {
+  "code-change": (newCode: string) => void;
+}
+
+const socket: Socket<ServerToClientEvents, ClientToServerEvents> = io(); // Adjust URL if backend is not on same origin
+
 export default function CodeEditor() {
-  const [code, setCode] = useState(`// Welcome to the Enhanced Code Editor
+  const [code, setCode] = useState<string>(`// Welcome to the Enhanced Code Editor
 function greetUser(name) {
   return \`Hello, \${name}! Welcome to collaborative coding.\`;
 }
@@ -45,23 +48,23 @@ console.log(greetUser(user));
 
 // Try running this code!`);
   
-  const [language, setLanguage] = useState("javascript");
-  const [theme, setTheme] = useState("vs-dark");
-  const [fontSize, setFontSize] = useState(14);
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const [output, setOutput] = useState("");
-  const [isOutputVisible, setIsOutputVisible] = useState(false);
-  const [connectedUsers, setConnectedUsers] = useState(3);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [undoStack, setUndoStack] = useState([]);
-  const [redoStack, setRedoStack] = useState([]);
-  const [isDarkMode, setIsDarkMode] = useState(true);
-  const [wordWrap, setWordWrap] = useState(false);
-  const [minimap, setMinimap] = useState(true);
-  const [lineNumbers, setLineNumbers] = useState(true);
+  const [language, setLanguage] = useState<string>("javascript");
+  const [theme, setTheme] = useState<string>("vs-dark");
+  const [fontSize, setFontSize] = useState<number>(14);
+  const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+  const [output, setOutput] = useState<string>("");
+  const [isOutputVisible, setIsOutputVisible] = useState<boolean>(false);
+  const [connectedUsers, setConnectedUsers] = useState<number>(1);
+  const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
+  const [undoStack, setUndoStack] = useState<string[]>([]);
+  const [redoStack, setRedoStack] = useState<string[]>([]);
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(true);
+  const [wordWrap, setWordWrap] = useState<boolean>(false);
+  const [minimap, setMinimap] = useState<boolean>(true);
+  const [lineNumbers, setLineNumbers] = useState<boolean>(true);
 
-  const editorRef = useRef(null);
-  const fileInputRef = useRef(null);
+
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const languages = [
     { value: "javascript", label: "JavaScript" },
@@ -82,48 +85,29 @@ console.log(greetUser(user));
   ];
 
   useEffect(() => {
-    // Mock socket connection
-    mockSocket.on("code-change", (newCode) => {
+    // Real socket connection
+    socket.on("code-change", (newCode: string) => {
       setCode(newCode);
     });
-
-    mockSocket.on("user-count", (count) => {
+    socket.on("user-count", (count: number) => {
       setConnectedUsers(count);
     });
-
     return () => {
-      mockSocket.off("code-change");
-      mockSocket.off("user-count");
+      socket.off("code-change");
+      socket.off("user-count");
     };
   }, []);
 
-  const handleChange = (value) => {
+  const handleChange = (value: string) => {
     if (value !== undefined) {
-      // Add to undo stack
-      setUndoStack(prev => [...prev.slice(-19), code]); // Keep last 20 states
+      setUndoStack((prev) => [...prev.slice(-19), code]); // Keep last 20 states
       setRedoStack([]); // Clear redo stack on new change
-      
       setCode(value);
-      mockSocket.emit("code-change", value);
+      socket.emit("code-change", value);
     }
   };
 
-  const handleEditorDidMount = (editor) => {
-    editorRef.current = editor;
-    
-    // Configure editor options
-    editor.updateOptions({
-      fontSize: fontSize,
-      wordWrap: wordWrap ? "on" : "off",
-      minimap: { enabled: minimap },
-      lineNumbers: lineNumbers ? "on" : "off",
-      scrollBeyondLastLine: false,
-      automaticLayout: true,
-      tabSize: 2,
-      insertSpaces: true,
-      detectIndentation: false,
-    });
-  };
+
 
   const runCode = () => {
     setIsOutputVisible(true);
@@ -165,7 +149,7 @@ console.log(greetUser(user));
     fileInputRef.current?.click();
   };
 
-  const handleFileLoad = (event) => {
+  const handleFileLoad = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
       const reader = new FileReader();
@@ -173,7 +157,7 @@ console.log(greetUser(user));
         const content = e.target?.result;
         if (typeof content === "string") {
           setCode(content);
-          mockSocket.emit("code-change", content);
+          socket.emit("code-change", content);
         }
       };
       reader.readAsText(file);
